@@ -58,7 +58,7 @@ impl<'a> ASMCompiler<'a> {
             .map(|x| x.trim())
             .filter(|x| x != &"");
         let (immediate_params, register_params): (Vec<&str>, Vec<&str>) = param_list
-            .partition(|param: &&str| '0' <= param.as_bytes()[0] as char && param.as_bytes()[0] as char <= '9');
+            .partition(|param: &&str| param.as_bytes()[0] as char == '-' || '0' <= param.as_bytes()[0] as char && param.as_bytes()[0] as char <= '9');
         let imm = Immediate::from(if immediate_params.len() > 0 { immediate_params[0].to_string() } else { "0".to_string() });
         let registers: Vec<Register> = register_params
             .iter()
