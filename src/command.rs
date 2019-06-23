@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
@@ -45,7 +46,11 @@ impl<'a> ASMCompiler<'a> {
             template: result
         }
     }
-    pub fn translate_command(&self, command: String) -> String {
+    fn translate_command(&mut self, command: String, labels: &mut HashMap<String, u32>, program_counter: &mut u32) -> String {
+        if command.ends_with(":") {
+            labels.insert(command.trim_end_matches(":").to_string(), *program_counter);
+            return "".to_string();
+        }
         let splitted: Vec<String> = command
             .replace("(", ",")
             .replace(")", ",")
@@ -57,9 +62,17 @@ impl<'a> ASMCompiler<'a> {
             .split(",")
             .map(|x| x.trim())
             .filter(|x| x != &"");
-        let (immediate_params, register_params): (Vec<&str>, Vec<&str>) = param_list
-            .partition(|param: &&str| param.as_bytes()[0] as char == '-' || '0' <= param.as_bytes()[0] as char && param.as_bytes()[0] as char <= '9');
-        let imm = Immediate::from(if immediate_params.len() > 0 { immediate_params[0].to_string() } else { "0".to_string() });
+        let (label_params, rest_params): (Vec<&str>, Vec<&str>) = param_list
+            .partition(|param: &&str| labels.get(&param.to_string()).is_some());
+        let (immediate_params, register_params): (Vec<&str>, Vec<&str>) =
+            rest_params.iter()
+                .partition(|param| param.as_bytes()[0] as char == '-' || '0' <= param.as_bytes()[0] as char && param.as_bytes()[0] as char <= '9');
+        let imm = if !label_params.is_empty() {
+            let offset = *labels.get(label_params[0]).unwrap() as i64 - *program_counter as i64;
+            Immediate::from(format!("{}", offset))
+        } else {
+            Immediate::from(if immediate_params.len() > 0 { immediate_params[0].to_string() } else { "0".to_string() })
+        };
         let registers: Vec<Register> = register_params
             .iter()
             .map(|x| Register::from(x.to_string()))
@@ -77,7 +90,19 @@ impl<'a> ASMCompiler<'a> {
             register_1: if registers.len() > 1 { registers[1].binary_form() } else { "No such command!".to_string() },
             register_2: if registers.len() > 2 { registers[2].binary_form() } else { "No such command!".to_string() },
         };
+        if !command.ends_with(":") {
+            *program_counter += 4;
+        }
         self.template.render(op.as_str(), &context).expect("Failed to render")
+    }
+    pub fn compile(&mut self, source_file: &mut File) {
+        let mut source = String::new();
+        source_file.read_to_string(&mut source).expect("Cannot read sourcefile!");
+        let mut program_counter: u32 = 0;
+        let mut labels = HashMap::new();
+        source.split("\n").for_each(|x| {
+            println!("{}", self.translate_command(x.trim().to_string(), &mut labels, &mut program_counter))
+        });
     }
 }
 
