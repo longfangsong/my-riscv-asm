@@ -15,4 +15,3 @@ fn main() {
     let mut input_file = File::open("./test.asm").expect("Source file not found!");
     compiler.compile(&mut input_file);
 }
-

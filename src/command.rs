@@ -90,9 +90,7 @@ impl<'a> ASMCompiler<'a> {
             register_1: if registers.len() > 1 { registers[1].binary_form() } else { "No such command!".to_string() },
             register_2: if registers.len() > 2 { registers[2].binary_form() } else { "No such command!".to_string() },
         };
-        if !command.ends_with(":") {
-            *program_counter += 4;
-        }
+        *program_counter += 4;
         self.template.render(op.as_str(), &context).expect("Failed to render")
     }
     pub fn compile(&mut self, source_file: &mut File) {

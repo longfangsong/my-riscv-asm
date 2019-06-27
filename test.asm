@@ -1,16 +1,13 @@
-addi x2, x0, 0x5
-addi x1, x0, 0x7
-add x3, x2, x1
-add x3, x3, x3
-add x4, x3, x0
-lui x5, 0x10000
-sw x4, 0x0(x5)
-lb x1, 0x0(x5)
-l1:
-    add x1, x1, x1
-    addi x2, x0, 0xc0
-    bge x1, x2, 0x8
-    jal x0, -0xc
-addi x2, x0, 0x1
-sub x1, x1, x2
-add x1, x1, x0
+addi t0, zero, 0x1
+addi t1, zero, 0x1
+loop:
+    add t3, t0, t1
+    add t0, t1, zero
+    add t1, t3, zero
+    rdtime t5
+    sleep:
+        rdtime t6
+        sub t3, t6, t5
+        addi t6, zero, 0x10
+        blt t3, t6, sleep
+    jal zero, loop

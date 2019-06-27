@@ -78,7 +78,7 @@ impl Immediate {
     pub fn branch_low(&self) -> String {
         let mut bit_select: Vec<usize> = vec![];
         bit_select.push(11);
-        bit_select.extend(1..4);
+        bit_select.extend(1..5);
         format!("{:05b}", self.bits_at(bit_select))
     }
     pub fn store_high(&self) -> String {
