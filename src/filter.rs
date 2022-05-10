@@ -24,7 +24,11 @@ pub fn filter_bits_at(n: &Value, params: &HashMap<String, Value>) -> tera::Resul
     let n: ParsedParam = serde_json::from_value(n.clone()).unwrap();
     let n = n.unwrap_immediate() as u32;
     if let Some(indexes) = params.get("indexes") {
-        let bits = indexes.as_array().unwrap().into_iter().map(|it| it.as_u64().unwrap() as usize);
+        let bits = indexes
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|it| it.as_u64().unwrap() as usize);
         let width = bits.len();
         let result = bits_at(n, bits);
         Ok(Value::String(format!("{:0width$b}", result)))
@@ -36,11 +40,15 @@ pub fn filter_bits_at(n: &Value, params: &HashMap<String, Value>) -> tera::Resul
         let result = bits_at(n, bits);
         Ok(Value::String(format!("{:0width$b}", result)))
     } else {
-        Err(tera::Error::msg("indexes or start and end must be provided"))
+        Err(tera::Error::msg(
+            "indexes or start and end must be provided",
+        ))
     }
 }
 
-pub fn lift_imm_filter(f: impl Fn(u32) -> String) -> impl Fn(&Value, &HashMap<String, Value>) -> tera::Result<Value> {
+pub fn lift_imm_filter(
+    f: impl Fn(u32) -> String,
+) -> impl Fn(&Value, &HashMap<String, Value>) -> tera::Result<Value> {
     move |num: &Value, _: &HashMap<String, Value>| {
         let num: ParsedParam = serde_json::from_value(num.clone()).unwrap();
         Ok(Value::String(f(num.unwrap_immediate() as u32)))
@@ -74,9 +82,7 @@ pub fn branch_high(n: u32) -> String {
 }
 
 pub fn branch_low(n: u32) -> String {
-    let mut bit_select: Vec<usize> = vec![];
-    bit_select.push(11);
+    let mut bit_select: Vec<usize> = vec![11];
     bit_select.extend(1..5);
     format!("{:05b}", bits_at(n, bit_select))
 }
-

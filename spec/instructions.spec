@@ -1,13 +1,13 @@
 lui         {{params[1] | bits_at(start=0, end=20)}}{{params[0] | register}}0110111
 auipc       {{params[1] | bits_at(start=0, end=20)}}{{params[0] | register}}0010111
 jal         {{params[1] | imm_jal_form}}{{params[0] | register}}1101111
-jalr        {{params[1] | imm_high_12}}{{params[2] | register}}000{{params[0] | register}}1100111
-beq         {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}000{{params[2] | imm_branch_low}}1100011
-bne         {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}001{{params[2] | imm_branch_low}}1100011
-blt         {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}100{{params[2] | imm_branch_low}}1100011
-bge         {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}101{{params[2] | imm_branch_low}}1100011
-bltu        {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}110{{params[2] | imm_branch_low}}1100011
-bgeu        {{params[2] | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}111{{params[2] | imm_branch_low}}1100011
+jalr        {{params[1] | bits_at(start=0, end=12)}}{{params[2] | register}}000{{params[0] | register}}1100111
+beq         {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}000{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
+bne         {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}001{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
+blt         {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}100{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
+bge         {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}101{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
+bltu        {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}110{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
+bgeu        {{offset(from=address, to=params[2]) | imm_branch_high}}{{params[1] | register}}{{params[0] | register}}111{{offset(from=address, to=params[2]) | imm_branch_low}}1100011
 lb          {{params[1] | bits_at(start=0, end=12)}}{{params[2] | register}}000{{params[0] | register}}0000011
 lh          {{params[1] | bits_at(start=0, end=12)}}{{params[2] | register}}001{{params[0] | register}}0000011
 lw          {{params[1] | bits_at(start=0, end=12)}}{{params[2] | register}}010{{params[0] | register}}0000011
@@ -30,7 +30,7 @@ sub         0100000{{params[2] | register}}{{params[1] | register}}000{{params[0
 sll         0000000{{params[2] | register}}{{params[1] | register}}001{{params[0] | register}}0110011
 slt         0000000{{params[2] | register}}{{params[1] | register}}010{{params[0] | register}}0110011
 sltu        0000000{{params[2] | register}}{{params[1] | register}}011{{params[0] | register}}0110011
-xor         0000000{{params[2] | register}}{{params[1] | register}}011{{params[0] | register}}0110011
+xor         0000000{{params[2] | register}}{{params[1] | register}}100{{params[0] | register}}0110011
 srl         0000000{{params[2] | register}}{{params[1] | register}}101{{params[0] | register}}0110011
 sra         0100000{{params[2] | register}}{{params[1] | register}}101{{params[0] | register}}0110011
 or          0000000{{params[2] | register}}{{params[1] | register}}110{{params[0] | register}}0110011

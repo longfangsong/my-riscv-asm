@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ParsedParam {
     Register(u8),
-    CSR(u16),
+    Csr(u16),
     Immediate(i32),
 }
 
@@ -22,7 +22,7 @@ impl ParsedParam {
     }
     pub fn unwrap_csr(&self) -> u16 {
         match self {
-            ParsedParam::CSR(r) => *r,
+            ParsedParam::Csr(r) => *r,
             _ => panic!("Expected CSR!"),
         }
     }

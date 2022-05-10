@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    io::{stdin, Read},
     lazy::SyncLazy,
 };
 use tera::{Context, Tera};
@@ -9,7 +10,6 @@ use tera::{Context, Tera};
 mod filter;
 mod param;
 use crate::{filter::*, param::ParsedParam};
-
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnparsedInstruction {
@@ -37,7 +37,12 @@ pub fn preprocess(code: &str) -> Vec<Line> {
 
 fn parse_instruction_line(line: &str) -> Line {
     let (name, params) = line.split_once(' ').unwrap();
-    let params = params.split(',').map(|it| it.trim().to_string()).collect();
+    let params = params
+        .replace('(', ",")
+        .replace(')', " ")
+        .split(',')
+        .map(|it| it.trim().to_string())
+        .collect();
     Line::Instruction(UnparsedInstruction {
         name: name.to_string(),
         params,
@@ -67,7 +72,11 @@ pub fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
                     if lower != 0 {
                         result.push(Line::Instruction(UnparsedInstruction {
                             name: "addi".to_string(),
-                            params: vec![params[0].clone(), params[0].clone(), format!("{}", lower)],
+                            params: vec![
+                                params[0].clone(),
+                                params[0].clone(),
+                                format!("{}", lower),
+                            ],
                         }));
                     }
                 }
@@ -159,14 +168,25 @@ pub fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32
         result.register_filter("imm_branch_low", filter::lift_imm_filter(branch_low));
         result.register_filter("register", filter::register_filter);
         result.register_filter("csr", filter::csr_filter);
+        result.register_function("offset", |args: &HashMap<String, tera::Value>| {
+            let from = serde_json::from_value(args.get("from").unwrap().clone())
+                .map(|it: ParsedParam| it.unwrap_immediate())
+                .unwrap_or_else(|_| args.get("from").unwrap().as_i64().unwrap() as i32);
+            let to = serde_json::from_value(args.get("to").unwrap().clone())
+                .map(|it: ParsedParam| it.unwrap_immediate())
+                .unwrap_or_else(|_| args.get("to").unwrap().as_i64().unwrap() as i32);
+            Ok(serde_json::to_value(ParsedParam::Immediate(to - from)).unwrap())
+        });
         result
     });
 
     let mut result = Vec::new();
-    for UnparsedInstruction { name, params } in instructions {
+    for (index, UnparsedInstruction { name, params }) in instructions.iter().enumerate() {
+        let address = index * 4;
         let mut context = Context::new();
-        let params: Vec<ParsedParam> = params.iter().map(|it| parse_param(it, &labels)).collect();
-        context.insert("params", &params);
+        let params: Vec<ParsedParam> = params.iter().map(|it| parse_param(it, labels)).collect();
+        context.insert("params", dbg!(&params));
+        context.insert("address", &address);
         let binary_form = COMMANDS_TEMPLATE.render(name, &context).unwrap();
         result.push(u32::from_str_radix(&binary_form, 2).unwrap());
     }
@@ -182,8 +202,8 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
             .map(|it| it.trim())
             .filter(|it| !it.is_empty())
         {
-            let (index, names) = line.split_once(" ").unwrap();
-            let names = names.split(",").map(|it| it.trim());
+            let (index, names) = line.split_once(' ').unwrap();
+            let names = names.split(',').map(|it| it.trim());
             for name in names {
                 registers.insert(name, index.parse::<u8>().unwrap());
             }
@@ -199,7 +219,7 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
             .map(|it| it.trim())
             .filter(|it| !it.is_empty())
         {
-            let (name, address) = line.split_once(" ").unwrap();
+            let (name, address) = line.split_once(' ').unwrap();
             csrs.insert(name, parse_int::parse(address).unwrap());
         }
         csrs
@@ -208,7 +228,7 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
     if let Some(register_id) = REGISTERS.get(code_param) {
         ParsedParam::Register(*register_id)
     } else if let Some(csr_id) = CSRS.get(code_param) {
-        ParsedParam::CSR(*csr_id)
+        ParsedParam::Csr(*csr_id)
     } else if let Ok(imm) = parse_int::parse(code_param) {
         ParsedParam::Immediate(imm)
     } else if let Some(imm) = labels.get(code_param) {
@@ -218,13 +238,42 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
     }
 }
 
-fn main() {
-    let preprocessed = preprocess("li ra, 0x8fff");
+fn compile(code: &str) -> Vec<u32> {
+    let preprocessed = preprocess(code);
     let replace_complex_pseudo_done = replace_complex_pseudo(&preprocessed);
     let replace_simple_pseudo_done = replace_simple_pseudo(&replace_complex_pseudo_done);
     let (instructions, labels) = assign_address(&replace_simple_pseudo_done);
-    let binary = render(&instructions, &labels);
-    for bin in binary {
-        println!("0x{:08x}", bin);
+    render(&instructions, &labels)
+}
+
+fn main() {
+    let mut input = Vec::new();
+    stdin().lock().read_to_end(&mut input).unwrap();
+    compile(&String::from_utf8(input).unwrap())
+        .iter()
+        .for_each(|it| println!("{:x}", it));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_simple_instructions() {
+        struct Case {
+            expected: u32,
+            code: &'static str,
+        }
+        let cases = include_str!("../test_cases/instructions.cases")
+            .split('\n')
+            .map(|it| it.trim())
+            .filter(|it| !it.is_empty())
+            .map(|it| it.split_once(' ').unwrap())
+            .map(|(expected, code)| Case {
+                expected: u32::from_str_radix(expected, 16).unwrap(),
+                code,
+            });
+        for Case { expected, code } in cases {
+            assert_eq!(compile(code), vec![expected]);
+        }
     }
 }
