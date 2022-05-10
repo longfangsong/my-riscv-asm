@@ -23,7 +23,7 @@ pub enum Line {
     Instruction(UnparsedInstruction),
 }
 
-pub fn preprocess(code: &str) -> Vec<Line> {
+fn preprocess(code: &str) -> Vec<Line> {
     let mut result = Vec::new();
     for line in code.lines().map(|it| it.trim()).filter(|it| !it.is_empty()) {
         if line.ends_with(':') {
@@ -36,7 +36,7 @@ pub fn preprocess(code: &str) -> Vec<Line> {
 }
 
 fn parse_instruction_line(line: &str) -> Line {
-    let (name, params) = line.split_once(' ').unwrap();
+    let (name, params) = line.split_once(' ').unwrap_or((line, ""));
     let params = params
         .replace('(', ",")
         .replace(')', " ")
@@ -49,7 +49,7 @@ fn parse_instruction_line(line: &str) -> Line {
     })
 }
 
-pub fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
+fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
     let mut result = Vec::new();
     for line in preprocessed {
         match line {
@@ -63,21 +63,28 @@ pub fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
                         (param >> 12) + 1
                     };
                     let lower = param - (higher << 12);
-                    if higher != 0 {
+                    if higher == 0 && lower == 0 {
                         result.push(Line::Instruction(UnparsedInstruction {
-                            name: "lui".to_string(),
-                            params: vec![params[0].clone(), format!("0x{:x}", higher)],
-                        }));
-                    }
-                    if lower != 0 {
-                        result.push(Line::Instruction(UnparsedInstruction {
-                            name: "addi".to_string(),
-                            params: vec![
-                                params[0].clone(),
-                                params[0].clone(),
-                                format!("{}", lower),
-                            ],
-                        }));
+                            name: "mv".to_string(),
+                            params: vec![params[0].clone(), "zero".to_string()],
+                        }))
+                    } else {
+                        if higher != 0 {
+                            result.push(Line::Instruction(UnparsedInstruction {
+                                name: "lui".to_string(),
+                                params: vec![params[0].clone(), format!("0x{:x}", higher)],
+                            }));
+                        }
+                        if lower != 0 {
+                            result.push(Line::Instruction(UnparsedInstruction {
+                                name: "addi".to_string(),
+                                params: vec![
+                                    params[0].clone(),
+                                    params[0].clone(),
+                                    format!("{}", lower),
+                                ],
+                            }));
+                        }
                     }
                 }
                 _ => result.push(Line::Instruction(UnparsedInstruction {
@@ -90,7 +97,7 @@ pub fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
     result
 }
 
-pub fn replace_simple_pseudo(complex_replaced: &[Line]) -> Vec<Line> {
+fn replace_simple_pseudo(complex_replaced: &[Line]) -> Vec<Line> {
     static PSEUDO_SIMPLE_INSTRUCTIONS: SyncLazy<Tera> = SyncLazy::new(|| {
         let mut result = Tera::default();
         let templates_str = include_str!("../spec/pseudo_simple.spec").trim();
@@ -100,7 +107,7 @@ pub fn replace_simple_pseudo(complex_replaced: &[Line]) -> Vec<Line> {
             .filter(|it| !it.is_empty());
         for template in templates {
             let (name, template) = template.split_once(' ').unwrap();
-            result.add_raw_template(name, template).unwrap();
+            result.add_raw_template(name, template.trim()).unwrap();
         }
         result
     });
@@ -130,7 +137,7 @@ pub fn replace_simple_pseudo(complex_replaced: &[Line]) -> Vec<Line> {
     result
 }
 
-pub fn assign_address(
+fn assign_address(
     fixed_width_instructions: &[Line],
 ) -> (Vec<UnparsedInstruction>, HashMap<String, i32>) {
     let mut result_instructions = Vec::new();
@@ -150,7 +157,7 @@ pub fn assign_address(
     (result_instructions, result_tags)
 }
 
-pub fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32>) -> Vec<u32> {
+fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32>) -> Vec<u32> {
     static COMMANDS_TEMPLATE: SyncLazy<Tera> = SyncLazy::new(|| {
         let mut result = Tera::default();
         let templates_str = include_str!("../spec/instructions.spec").trim();
@@ -185,7 +192,7 @@ pub fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32
         let address = index * 4;
         let mut context = Context::new();
         let params: Vec<ParsedParam> = params.iter().map(|it| parse_param(it, labels)).collect();
-        context.insert("params", dbg!(&params));
+        context.insert("params", &params);
         context.insert("address", &address);
         let binary_form = COMMANDS_TEMPLATE.render(name, &context).unwrap();
         result.push(u32::from_str_radix(&binary_form, 2).unwrap());
@@ -257,13 +264,13 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_simple_instructions() {
+
+    fn check_cases(code: &'static str) {
         struct Case {
             expected: u32,
             code: &'static str,
         }
-        let cases = include_str!("../test_cases/instructions.cases")
+        let cases = code
             .split('\n')
             .map(|it| it.trim())
             .filter(|it| !it.is_empty())
@@ -275,5 +282,15 @@ mod tests {
         for Case { expected, code } in cases {
             assert_eq!(compile(code), vec![expected]);
         }
+    }
+    
+    #[test]
+    fn test_simple_instructions() {
+        check_cases(include_str!("../test_cases/instructions.cases"));
+    }
+
+    #[test]
+    fn test_simple_pseudo_instructions() {
+        check_cases(include_str!("../test_cases/pseudo_simple.cases"));
     }
 }

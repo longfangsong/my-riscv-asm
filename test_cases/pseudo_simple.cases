@@ -1,0 +1,33 @@
+00000013 nop
+00000093 mv x1, x0
+fff1c113 not x2, x3
+40500233 neg x4, x5
+0013b313 seqz x6, x7
+00903433 snez x8, x9
+0005a533 sltz x10, x11
+00d02633 sgtz x12, x13
+00070263 beqz x14, 4
+00079263 bnez x15, 4
+00105263 blez x1, 4
+00015263 bgez x2, 4
+0001c263 bltz x3, 4
+00404263 bgtz x4, 4
+00534263 bgt x5, x6, 4
+00745263 ble x7, x8, 4
+00956263 bgtu x9, x10, 4
+00b67263 bleu x11, x12, 4
+0040006f j 4
+00008067 ret
+c00026f3 rdcycle x13
+c8002773 rdcycleh x14
+c01026f3 rdtime x13
+c8102773 rdtimeh x14
+c02027f3 rdinstret x15
+c82020f3 rdinstreth x1
+c0002173 csrr x2, cycle
+c8019073 csrw cycleh, x3
+c0122073 csrs time, x4
+c812b073 csrc timeh, x5
+c020d073 csrwi instret, 1
+c8216073 csrsi instreth, 2
+c001f073 csrci cycle, 3
