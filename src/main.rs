@@ -57,24 +57,29 @@ fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
             Line::Instruction(UnparsedInstruction { name, params }) => match name.as_str() {
                 "li" => {
                     let param: i32 = parse_int::parse(&params[1]).unwrap();
-                    let higher = if param & (1 << 11) == 0 {
-                        param >> 12
-                    } else {
+                    let lower = param & 0xfff;
+                    let lower_is_negative = lower > 0x7ff;
+                    let higher = if lower_is_negative {
+                        // lower is, in fact, a negative number when used in addi
                         (param >> 12) + 1
+                    } else {
+                        param >> 12
                     };
-                    let lower = param - (higher << 12);
                     if higher == 0 && lower == 0 {
                         result.push(Line::Instruction(UnparsedInstruction {
                             name: "mv".to_string(),
                             params: vec![params[0].clone(), "zero".to_string()],
                         }))
+                    } else if higher == 0 {
+                        result.push(Line::Instruction(UnparsedInstruction {
+                            name: "addi".to_string(),
+                            params: vec![params[0].clone(), "x0".to_string(), format!("{}", lower)],
+                        }));
                     } else {
-                        if higher != 0 {
-                            result.push(Line::Instruction(UnparsedInstruction {
-                                name: "lui".to_string(),
-                                params: vec![params[0].clone(), format!("0x{:x}", higher)],
-                            }));
-                        }
+                        result.push(Line::Instruction(UnparsedInstruction {
+                            name: "lui".to_string(),
+                            params: vec![params[0].clone(), format!("0x{:x}", higher)],
+                        }));
                         if lower != 0 {
                             result.push(Line::Instruction(UnparsedInstruction {
                                 name: "addi".to_string(),
@@ -236,7 +241,10 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
         ParsedParam::Register(*register_id)
     } else if let Some(csr_id) = CSRS.get(code_param) {
         ParsedParam::Csr(*csr_id)
-    } else if let Ok(imm) = parse_int::parse(code_param) {
+    } else if code_param.starts_with('-') {
+        let imm = parse_int::parse(code_param).unwrap();
+        ParsedParam::Immediate(imm)
+    } else if let Ok(imm) = parse_int::parse::<u32>(code_param).map(|it| it as i32) {
         ParsedParam::Immediate(imm)
     } else if let Some(imm) = labels.get(code_param) {
         ParsedParam::Immediate(*imm)
@@ -265,7 +273,7 @@ fn main() {
 mod tests {
     use super::*;
 
-    fn check_cases(code: &'static str) {
+    fn check_single_instruction_cases(code: &'static str) {
         struct Case {
             expected: u32,
             code: &'static str,
@@ -283,14 +291,39 @@ mod tests {
             assert_eq!(compile(code), vec![expected]);
         }
     }
-    
+
     #[test]
     fn test_simple_instructions() {
-        check_cases(include_str!("../test_cases/instructions.cases"));
+        check_single_instruction_cases(include_str!("../test_cases/instructions.cases"));
     }
 
     #[test]
     fn test_simple_pseudo_instructions() {
-        check_cases(include_str!("../test_cases/pseudo_simple.cases"));
+        check_single_instruction_cases(include_str!("../test_cases/pseudo_simple.cases"));
+    }
+
+    #[test]
+    fn test_li() {
+        struct Case {
+            expected: Vec<u32>,
+            code: &'static str,
+        }
+        let cases = include_str!("../test_cases/li.cases")
+            .split('~')
+            .map(|it| it.trim())
+            .filter(|it| !it.is_empty())
+            .map(|it| it.split_once('\n').unwrap())
+            .map(|(code, expected)| Case {
+                expected: expected
+                    .split('\n')
+                    .map(|it| it.trim())
+                    .filter(|it| !it.is_empty())
+                    .map(|it| u32::from_str_radix(it, 16).unwrap())
+                    .collect(),
+                code,
+            });
+        for Case { expected, code } in cases {
+            assert_eq!(compile(code), expected);
+        }
     }
 }
