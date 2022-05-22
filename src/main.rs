@@ -5,6 +5,7 @@ use std::{
     io::{stdin, Read},
     lazy::SyncLazy,
 };
+
 use tera::{Context, Tera};
 
 mod filter;
@@ -313,6 +314,31 @@ mod tests {
             .map(|it| it.trim())
             .filter(|it| !it.is_empty())
             .map(|it| it.split_once('\n').unwrap())
+            .map(|(code, expected)| Case {
+                expected: expected
+                    .split('\n')
+                    .map(|it| it.trim())
+                    .filter(|it| !it.is_empty())
+                    .map(|it| u32::from_str_radix(it, 16).unwrap())
+                    .collect(),
+                code,
+            });
+        for Case { expected, code } in cases {
+            assert_eq!(compile(code), expected);
+        }
+    }
+
+    #[test]
+    fn test_jump() {
+        struct Case {
+            expected: Vec<u32>,
+            code: &'static str,
+        }
+        let cases = include_str!("../test_cases/jump.cases")
+            .split("==")
+            .map(|it| it.trim())
+            .filter(|it| !it.is_empty())
+            .map(|it| it.split_once('~').unwrap())
             .map(|(code, expected)| Case {
                 expected: expected
                     .split('\n')

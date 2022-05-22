@@ -1,0 +1,9 @@
+boot:             
+    blt x3, x4, label
+    nop
+label:
+	bgt x5, x6, boot
+~
+0041c463
+00000013
+fe534ce3

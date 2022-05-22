@@ -1,5 +1,5 @@
 [package]
-name = "my-riscv-asm"
+name = "shuasm"
 version = "0.1.0"
 authors = ["longfangsong <longfangsong@icloud.com>"]
 edition = "2021"
