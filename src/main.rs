@@ -1,11 +1,8 @@
-#![feature(once_cell)]
+use std::{collections::HashMap, fs::File, io::Write, path::PathBuf};
 
-use std::{
-    collections::HashMap,
-    io::{stdin, Read},
-    lazy::SyncLazy,
-};
-
+use clap::{Parser, ValueEnum};
+use ezio::prelude::*;
+use once_cell::sync::Lazy;
 use tera::{Context, Tera};
 
 mod filter;
@@ -104,7 +101,7 @@ fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
 }
 
 fn replace_simple_pseudo(complex_replaced: &[Line]) -> Vec<Line> {
-    static PSEUDO_SIMPLE_INSTRUCTIONS: SyncLazy<Tera> = SyncLazy::new(|| {
+    static PSEUDO_SIMPLE_INSTRUCTIONS: Lazy<Tera> = Lazy::new(|| {
         let mut result = Tera::default();
         let templates_str = include_str!("../spec/pseudo_simple.spec").trim();
         let templates = templates_str
@@ -164,7 +161,7 @@ fn assign_address(
 }
 
 fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32>) -> Vec<u32> {
-    static COMMANDS_TEMPLATE: SyncLazy<Tera> = SyncLazy::new(|| {
+    static COMMANDS_TEMPLATE: Lazy<Tera> = Lazy::new(|| {
         let mut result = Tera::default();
         let templates_str = include_str!("../spec/instructions.spec").trim();
         let templates = templates_str
@@ -207,7 +204,7 @@ fn render(instructions: &[UnparsedInstruction], labels: &HashMap<String, i32>) -
 }
 
 fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
-    static REGISTERS: SyncLazy<HashMap<&'static str, u8>> = SyncLazy::new(|| {
+    static REGISTERS: Lazy<HashMap<&'static str, u8>> = Lazy::new(|| {
         let mut registers = HashMap::new();
         let registers_str = include_str!("../spec/registers.spec");
         for line in registers_str
@@ -224,7 +221,7 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
         registers
     });
 
-    static CSRS: SyncLazy<HashMap<&'static str, u16>> = SyncLazy::new(|| {
+    static CSRS: Lazy<HashMap<&'static str, u16>> = Lazy::new(|| {
         let mut csrs = HashMap::new();
         let csrs_str = include_str!("../spec/csr.spec");
         for line in csrs_str
@@ -262,12 +259,47 @@ fn compile(code: &str) -> Vec<u32> {
     render(&instructions, &labels)
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+enum OutputFormat {
+    /// Output binary file
+    Binary,
+    /// Output hex file
+    Text,
+}
+
+/// SHUOSC RISC-V assembler
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Input file path.
+    #[arg(short, long)]
+    input: PathBuf,
+
+    /// Output file path.
+    #[arg(short, long)]
+    output: PathBuf,
+
+    /// Output format.
+    #[arg(short, long, default_value = "binary", value_enum)]
+    format: OutputFormat,
+}
+
 fn main() {
-    let mut input = Vec::new();
-    stdin().lock().read_to_end(&mut input).unwrap();
-    compile(&String::from_utf8(input).unwrap())
-        .iter()
-        .for_each(|it| println!("{:x}", it));
+    let args = Args::parse();
+    let code = file::read(args.input);
+    let binaries = compile(&code);
+    let mut output_file = File::create(args.output).unwrap();
+    if args.format == OutputFormat::Binary {
+        for binary_instruction in binaries {
+            output_file
+                .write_all(&binary_instruction.to_le_bytes())
+                .unwrap();
+        }
+    } else {
+        for binary_instruction in binaries {
+            writeln!(output_file, "{:08x}", binary_instruction).unwrap();
+        }
+    }
 }
 
 #[cfg(test)]
