@@ -7,7 +7,11 @@ use tera::{Context, Tera};
 
 mod filter;
 mod param;
+use shadow_rs::shadow;
+
 use crate::{filter::*, param::ParsedParam};
+
+shadow!(build);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnparsedInstruction {
@@ -54,15 +58,15 @@ fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
             Line::Tag(tag) => result.push(Line::Tag(tag.to_string())),
             Line::Instruction(UnparsedInstruction { name, params }) => match name.as_str() {
                 "li" => {
-                    let param: i32 = parse_int::parse(&params[1]).unwrap();
+                    let param: i64 = parse_int::parse(&params[1]).unwrap();
                     let lower = param & 0xfff;
                     let lower_is_negative = lower > 0x7ff;
-                    let higher = if lower_is_negative {
+                    let higher = (if lower_is_negative {
                         // lower is, in fact, a negative number when used in addi
                         (param >> 12) + 1
                     } else {
                         param >> 12
-                    };
+                    }) & 0xffffffff;
                     if higher == 0 && lower == 0 {
                         result.push(Line::Instruction(UnparsedInstruction {
                             name: "mv".to_string(),
@@ -71,12 +75,12 @@ fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
                     } else if higher == 0 {
                         result.push(Line::Instruction(UnparsedInstruction {
                             name: "addi".to_string(),
-                            params: vec![params[0].clone(), "x0".to_string(), format!("{}", lower)],
+                            params: vec![params[0].clone(), "x0".to_string(), format!("{lower}")],
                         }));
                     } else {
                         result.push(Line::Instruction(UnparsedInstruction {
                             name: "lui".to_string(),
-                            params: vec![params[0].clone(), format!("0x{:x}", higher)],
+                            params: vec![params[0].clone(), format!("0x{higher:x}")],
                         }));
                         if lower != 0 {
                             result.push(Line::Instruction(UnparsedInstruction {
@@ -84,7 +88,7 @@ fn replace_complex_pseudo(preprocessed: &[Line]) -> Vec<Line> {
                                 params: vec![
                                     params[0].clone(),
                                     params[0].clone(),
-                                    format!("{}", lower),
+                                    format!("{lower}"),
                                 ],
                             }));
                         }
@@ -247,7 +251,7 @@ fn parse_param(code_param: &str, labels: &HashMap<String, i32>) -> ParsedParam {
     } else if let Some(imm) = labels.get(code_param) {
         ParsedParam::Immediate(*imm)
     } else {
-        panic!("unknown parameter: {}", code_param);
+        panic!("unknown parameter: {code_param}");
     }
 }
 
@@ -269,7 +273,7 @@ enum OutputFormat {
 
 /// SHUOSC RISC-V assembler
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, long_version = build::CLAP_LONG_VERSION, about, long_about = None)]
 struct Args {
     /// Input file path.
     #[arg(short, long)]
@@ -297,7 +301,7 @@ fn main() {
         }
     } else {
         for binary_instruction in binaries {
-            writeln!(output_file, "{:08x}", binary_instruction).unwrap();
+            writeln!(output_file, "{binary_instruction:08x}").unwrap();
         }
     }
 }

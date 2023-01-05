@@ -31,14 +31,14 @@ pub fn filter_bits_at(n: &Value, params: &HashMap<String, Value>) -> tera::Resul
             .map(|it| it.as_u64().unwrap() as usize);
         let width = bits.len();
         let result = bits_at(n, bits);
-        Ok(Value::String(format!("{:0width$b}", result)))
+        Ok(Value::String(format!("{result:0width$b}")))
     } else if let (Some(start), Some(end)) = (params.get("start"), params.get("end")) {
         let start = start.as_u64().unwrap() as usize;
         let end = end.as_u64().unwrap() as usize;
         let bits = start..end;
         let width = bits.len();
         let result = bits_at(n, bits);
-        Ok(Value::String(format!("{:0width$b}", result)))
+        Ok(Value::String(format!("{result:0width$b}")))
     } else {
         Err(tera::Error::msg(
             "indexes or start and end must be provided",
